@@ -144,16 +144,28 @@ def get_subspace(args, init_z, vis_flag=False):
 def train(args, loader, generator, discriminator, extra, g_optim, d_optim, e_optim, g_ema, device, g_source, d_source):
     loader = sample_data(loader)
 
-    imsave_path = os.path.join('samples', args.exp)
-    model_path = os.path.join('checkpoints', args.exp)
+    temp_str = args.exp
+    if args.self_corr_loss:
+        temp_str += "_self"
+    if args.dis_corr_loss:
+        temp_str += '_dis'
+    if args.proj:
+        temp_str += '_proj'
+    temp_str += '_'
+    temp_str += str(args.task)
+    
+
+    imsave_path = os.path.join('samples', temp_str)
+    model_path = os.path.join('checkpoints', temp_str)
 
     if not os.path.exists(imsave_path):
         os.makedirs(imsave_path)
     if not os.path.exists(model_path):
         os.makedirs(model_path)
 
-    if args.proj != 'None':
+    if args.proj:
         Proj_module = Projection_module_church(args)
+
 
     # this defines the anchor points, and when sampling noise close to these, we impose image-level adversarial loss (Eq. 4 in the paper)
     init_z = torch.randn(args.n_train, args.latent, device=device)
@@ -174,7 +186,8 @@ def train(args, loader, generator, discriminator, extra, g_optim, d_optim, e_opt
     pool_dict_sp[256] = nn.AdaptiveAvgPool2d((64, 64))
 
     Avg = avg_conv().cuda()
-    Loss_fn = nn.SmoothL1Loss().cuda()
+    Loss_fn = nn.L1Loss().cuda()
+    Loss_fn_smth = nn.SmoothL1Loss().cuda()
     if get_rank() == 0:
         pbar = tqdm(pbar, initial=args.start_iter,
                     dynamic_ncols=True, smoothing=0.01)
@@ -213,9 +226,6 @@ def train(args, loader, generator, discriminator, extra, g_optim, d_optim, e_opt
     for idx in pbar:
         i = idx + args.start_iter
         which = i % args.subspace_freq # defines whether we sample from anchor region in this iteration or other
-        #if args.proj != 'None':
-        #    Proj_module.adjust_sub(total_iter=args.iter, n_iter=i)
-        #    continue
         if i > args.iter:
             print("Done!")
             break
@@ -234,7 +244,7 @@ def train(args, loader, generator, discriminator, extra, g_optim, d_optim, e_opt
             # sample from anchors, apply image-level adversarial loss
             noise = [get_subspace(args, init_z.clone())]
 
-        if args.proj != 'None':
+        if args.proj:
             w = [generator.module.style(item) for item in noise]
             w = [Proj_module.modulate(item) for item in w]
             fake_img, _ = generator(w, input_is_latent=True)
@@ -311,7 +321,7 @@ def train(args, loader, generator, discriminator, extra, g_optim, d_optim, e_opt
         else:
             noise = [get_subspace(args, init_z.clone())]
 
-        if args.proj != 'None':
+        if args.proj:
             w = [generator.module.style(item) for item in noise]
             w = [Proj_module.modulate(item) for item in w]
             fake_img, _ = generator(w, input_is_latent=True)
@@ -324,29 +334,23 @@ def train(args, loader, generator, discriminator, extra, g_optim, d_optim, e_opt
         fake_pred, _ = discriminator(
             fake_img, extra=extra, flag=which, p_ind=np.random.randint(lowp, highp))
         g_loss = g_nonsaturating_loss(fake_pred)
-
-        # distance consistency loss
-        if args.self_sim_loss_new != 'None':
+        # self_corr_loss
+        if args.self_corr_loss:
             with torch.set_grad_enabled(False):
                 z = torch.randn(args.feat_const_batch, args.latent, device=device)
-                if args.proj != 'None':
+                if args.proj:
                     w = [g_source.module.style(z)]
-            #w = [generator.module.style(item) for item in noise]
                     w = [Proj_module.modulate(item) for item in w]
-                    #print('Here')
-                    #exit()
                     _, feat_source = g_source(w, input_is_latent=True, return_feats=True, randomize_noise=False)
                 else:
                     _, feat_source = g_source([z], return_feats=True, randomize_noise=False)
-            if args.proj != 'None':
+            if args.proj:
                 w = [generator.module.style(z)]
-            #w = [generator.module.style(item) for item in noise]
                 w = [Proj_module.modulate(item) for item in w]
                 _, feat_target = generator(w, input_is_latent=True, return_feats=True, randomize_noise=False)
             else:
                 _, feat_target = generator([z], return_feats=True, randomize_noise=False)
-            loss_d = 0
-            #Corr_mat = []
+            self_corr_loss = 0
             for idxx, (feat_s, feat_t) in enumerate(zip(feat_source, feat_target)):
                 feat_size = feat_s.size(2)
                 vector_len = feat_s.size(1)
@@ -354,16 +358,7 @@ def train(args, loader, generator, discriminator, extra, g_optim, d_optim, e_opt
                 feat = torch.cat([feat_s, feat_t], dim=0)
                 batchsize = feat.size(0)
                 feat = F.normalize(feat, dim=1)
-                if feat_size <= 32:
-                    #feat = feat
-                    feat = feat.reshape(feat.size(0), feat.size(1), feat_size ** 2)
-                    feat = feat.permute(0, 2, 1)
-                    self_sim = torch.matmul(feat, feat.transpose(1,2))
-                    self_sim = torch.chunk(self_sim, 2, dim=0)
-                    loss_d += Loss_fn(self_sim[0], self_sim[1])
-
-                elif feat_size >= 64 and feat_size <= 256:
-                    #feat = F.normalize(feat, dim=1)
+                if feat_size >= 64 and feat_size <= 256:
                     feat = pool_dict[feat_size](feat)
                     feat_size = int(feat_size / 2)
                     window_size = int(feat_size / 2)
@@ -372,154 +367,166 @@ def train(args, loader, generator, discriminator, extra, g_optim, d_optim, e_opt
                     unfold_feat = F.unfold(feat, (window_size, window_size), stride=strid)
                     patch_num = unfold_feat.size(-1)
                     unfold_feat = unfold_feat.resize(batchsize, vector_len, window_size * window_size, patch_num)
-                    #unfold_feat = F.normalize(unfold_feat, dim=1)
                     unfold_feat = unfold_feat.permute(0,3,2,1).reshape(batchsize*patch_num, window_size * window_size, vector_len)
                     self_sim = torch.matmul(unfold_feat, unfold_feat.transpose(1,2)).reshape(batchsize, patch_num, window_size * window_size, window_size * window_size)
-                    #print(self_sim.size())
                     self_sim = torch.chunk(self_sim, 2, dim=0)
-                    
-                    #topk_ind = torch.topk(slef_sim[1], int(sim_t.size(1) / 4) ,dim=1)[1]
-                    loss_d += Loss_fn(self_sim[0], self_sim[1]) 
-                    #(1 - idxx / 30) *
+                    self_corr_loss += Loss_fn_smth(self_sim[0], self_sim[1]) 
                     feat = feat[:, :, ud:feat_size-ud, ud:feat_size-ud]
-                    #print(feat.size())
                     unfold_feat = F.unfold(feat, (window_size, window_size), stride=strid)
                     patch_num = unfold_feat.size(-1)
                     unfold_feat = unfold_feat.resize(batchsize, vector_len, window_size * window_size, patch_num)
-                    #unfold_feat = F.normalize(unfold_feat, dim=1)
                     unfold_feat = unfold_feat.permute(0,3,2,1).reshape(batchsize*patch_num, window_size * window_size, vector_len)
-                #print(torch.sum(item * item, dim=2))
-                #print(item.size())
                     self_sim = torch.matmul(unfold_feat, unfold_feat.transpose(1,2)).reshape(batchsize, patch_num, window_size * window_size, window_size * window_size)
-                    #print(self_sim.size())
                     self_sim = torch.chunk(self_sim, 2, dim=0)
-                    loss_d += Loss_fn(self_sim[0], self_sim[1]) 
-            
+                    self_corr_loss += Loss_fn_smth(self_sim[0], self_sim[1]) 
                 else:
                     continue
-        #exit()
-        if args.self_sim_loss_new != 'None':
-            g_loss = g_loss + 0.8 * loss_d
+
+        if args.self_corr_loss:
+            g_loss = g_loss + 0.8 * self_corr_loss
         
+        if args.dis_corr_loss:
+            if args.self_corr_loss:
+                if i % args.dis_corr_freq == 0:
+                    dis_corr_loss = 0
+                    with torch.no_grad():
+                        z = torch.randn(1, args.latent, device=device).repeat(args.feat_const_batch, 1)
+                        z_n = torch.randn(args.feat_const_batch, args.latent, device=device) 
+                        z = z * 0.85 + z_n * 0.15
+                        _, feat_source = g_source([z_n], return_feats=True, randomize_noise=False)
+                        
+                    _, feat_target = generator([z_n], return_feats=True, randomize_noise=False)
+                    for idxx, (feat_s, feat_t) in enumerate(zip(feat_source, feat_target)):
+                        feat_size_ori = feat_s.size(2)
+                        if feat_size_ori > 128:
+                            continue
+                        
+                        feat_s = F.normalize(feat_s, dim=1)
+                        feat_t = F.normalize(feat_t, dim=1)
 
+                        if feat_size_ori == 64:
+                            unfold_feat_s = F.unfold(feat_s, (16, 16), stride=16)
+                            unfold_feat_s = unfold_feat_s.resize(4, 512, 16, 16, 16)
+                            unfold_feat_t = F.unfold(feat_t, (16, 16), stride=16)
+                            unfold_feat_t = unfold_feat_t.resize(4, 512, 16, 16, 16)
+                            feat_s = unfold_feat_s
+                            feat_t = unfold_feat_t
+                        
+                        if feat_size_ori == 128:
+                            unfold_feat_s = F.unfold(feat_s, (32, 32), stride=32)
+                            unfold_feat_s = unfold_feat_s.resize(4, 256, 32, 32, 16)
+                            
 
-        if args.sp_inter_sim != 'None' and (i-1) % 4 == 0:
-            loss_sp_inter_sim = 0
-            #z_ori[2] = torch.sum(z_ori[:3]) / 3
-            with torch.no_grad():
-                z = torch.randn(1, args.latent, device=device).repeat(args.feat_const_batch, 1)
-                #z_n = torch.randn(args.feat_const_batch, args.latent, device=device) / 9
-                z_n = torch.randn(args.feat_const_batch, args.latent, device=device) 
-                z = z * 0.85 + z_n * 0.15
-                if args.proj != 'None':
-                    w = [g_source.module.style(z)]
-                    w = [Proj_module.modulate(item) for item in w]
-                    _, feat_source = g_source(w, input_is_latent=True, return_feats=True, randomize_noise=False)
-                else:
-                    #_, feat_source = g_source([z], return_feats=True, randomize_noise=False)
-                    _, feat_source = g_source([z_n], return_feats=True, randomize_noise=False)
+                            unfold_feat_t = F.unfold(feat_t, (32, 32), stride=32)
+                            unfold_feat_t = unfold_feat_t.resize(4, 256, 32, 32, 16)
+                            feat_s = unfold_feat_s
+                            feat_t = unfold_feat_t
+                        
+                        for j in range(args.feat_const_batch - 1):
+                            anc_feat_s = feat_s[j].unsqueeze(0)
+                            anc_feat_t = feat_t[j].unsqueeze(0)
+                            cons_feat_s = feat_s[j+1:]
+                            cons_feat_t = feat_t[j+1:]
+                            repeat_num = args.feat_const_batch - 1 - j
+                            if repeat_num > 1:
+                                if feat_size_ori >= 64:
+                                    anc_feat_s = anc_feat_s.repeat(repeat_num, 1, 1, 1, 1)
+                                    anc_feat_t = anc_feat_t.repeat(repeat_num, 1, 1, 1, 1)
+                                else:
+                                    anc_feat_s = anc_feat_s.repeat(repeat_num, 1, 1, 1)
+                                    anc_feat_t = anc_feat_t.repeat(repeat_num, 1, 1, 1)
+                            anc_feat = torch.cat([anc_feat_s, anc_feat_t])
+                            cons_feat = torch.cat([cons_feat_s, cons_feat_t])
+                            if feat_size_ori >= 64:
+                                anc_feat = anc_feat.permute(0, 4, 1, 2, 3)
+                                anc_feat_size = anc_feat.size()
+                                anc_feat = anc_feat.reshape(anc_feat_size[0]*anc_feat_size[1], anc_feat_size[2], anc_feat_size[3], anc_feat_size[4])
+                                cons_feat = cons_feat.permute(0, 4, 1, 2, 3)
+                                cons_feat = cons_feat.reshape(anc_feat_size[0]*anc_feat_size[1], anc_feat_size[2], anc_feat_size[3], anc_feat_size[4])
+                            anc_feat = anc_feat.view(anc_feat.size(0), anc_feat.size(1), -1).permute(0, 2, 1)
+                            cons_feat = cons_feat.view(cons_feat.size(0), cons_feat.size(1), -1)
+                            corr = anc_feat.matmul(cons_feat)
+                            mult = corr.size(2)
+                            corr = F.softmax(corr, dim=2)
+                            corr_list = torch.chunk(corr, 2, dim=0)
+                            dis_corr_loss += Loss_fn(corr_list[0], corr_list[1]) * (args.feat_const_batch - 1 - j) * mult  
+
+                        if feat_size_ori == 128: break
+                    dis_corr_loss = dis_corr_loss / 6
                 
-            if args.proj != 'None':
-                w = [generator.module.style(z)]
-            #w = [generator.module.style(item) for item in noise]
-                w = [Proj_module.modulate(item) for item in w]
-                _, feat_target = generator(w, input_is_latent=True, return_feats=True, randomize_noise=False)
             else:
-                _, feat_target = generator([z], return_feats=True, randomize_noise=False)
-            for idxx, (feat_s, feat_t) in enumerate(zip(feat_source, feat_target)):
-                #print(torch.sum(torch.abs(feat_s_cons - feat_t_cons)))
-                #print(torch.sum(torch.abs(feat_s - feat_t)))
-                feat_size_ori = feat_s.size(2)
-                if feat_size_ori > 128:
-                    continue
-                
-                feat_s = F.normalize(feat_s, dim=1)
-                feat_t = F.normalize(feat_t, dim=1)
-                #batchsize, vector_len, _, _ = feat_s.size()
-                if feat_size_ori == 64:
-                    #print(feat_s.size())
-                    unfold_feat_s = F.unfold(feat_s, (16, 16), stride=16)
-                    unfold_feat_s = unfold_feat_s.resize(4, 512, 16, 16, 16)
+                dis_corr_loss = 0
+                with torch.no_grad():
+                    z = torch.randn(1, args.latent, device=device).repeat(args.feat_const_batch, 1)
+                    z_n = torch.randn(args.feat_const_batch, args.latent, device=device) 
+                    z = z * 0.85 + z_n * 0.15
+                    _, feat_source = g_source([z_n], return_feats=True, randomize_noise=False)
                     
-
-                    unfold_feat_t = F.unfold(feat_t, (16, 16), stride=16)
-                    unfold_feat_t = unfold_feat_t.resize(4, 512, 16, 16, 16)
-                    feat_s = unfold_feat_s
-                    feat_t = unfold_feat_t
-                #only 128 sp_new_1
-                if feat_size_ori == 128:
-                    #print(feat_s.size())
-                    unfold_feat_s = F.unfold(feat_s, (32, 32), stride=32)
-                    unfold_feat_s = unfold_feat_s.resize(4, 256, 32, 32, 16)
+                _, feat_target = generator([z_n], return_feats=True, randomize_noise=False)
+                for idxx, (feat_s, feat_t) in enumerate(zip(feat_source, feat_target)):
+                    feat_size_ori = feat_s.size(2)
+                    if feat_size_ori > 128:
+                        continue
                     
+                    feat_s = F.normalize(feat_s, dim=1)
+                    feat_t = F.normalize(feat_t, dim=1)
 
-                    unfold_feat_t = F.unfold(feat_t, (32, 32), stride=32)
-                    unfold_feat_t = unfold_feat_t.resize(4, 256, 32, 32, 16)
-                    feat_s = unfold_feat_s
-                    feat_t = unfold_feat_t
-                
-                """feat_anc = torch.cat([feat_s_anc, feat_t_anc])
-                feat_cons = torch.cat([feat_s_cons, feat_t_cons])
-                feat_anc = pool_dict[feat_size](feat_anc)
-                feat_cons = pool_dict[feat_size](feat_cons)
-                ind = int(math.log2(512 // feat_s_anc.size(1)))
-                #feat_anc = pool_dict[feat_size](feat_anc)
-                #feat_cons = pool_dict[feat_size](feat_cons)
-                feat_anc = F.normalize(feat_anc, dim=1)
-                feat_anc = Avg(feat_anc, ind)
-                #print(feat_anc[0, :, 1, 1])
-                feat_cons = F.normalize(feat_cons, dim=1)
+                    if feat_size_ori == 64:
+                        unfold_feat_s = F.unfold(feat_s, (16, 16), stride=16)
+                        unfold_feat_s = unfold_feat_s.resize(4, 512, 16, 16, 16)
+                        unfold_feat_t = F.unfold(feat_t, (16, 16), stride=16)
+                        unfold_feat_t = unfold_feat_t.resize(4, 512, 16, 16, 16)
+                        feat_s = unfold_feat_s
+                        feat_t = unfold_feat_t
+                    
+                    if feat_size_ori == 128:
+                        unfold_feat_s = F.unfold(feat_s, (32, 32), stride=32)
+                        unfold_feat_s = unfold_feat_s.resize(4, 256, 32, 32, 16)
+                        
 
-                corr = (feat_cons * feat_anc).sum(dim=1)
-                corr_list = torch.chunk(corr, 2, dim=0)
-                #print(corr.size())
-                
-                loss_sp_inter_sim += Loss_fn(corr_list[0], corr_list[1])"""
-                
-                for j in range(args.feat_const_batch - 1):
-                    anc_feat_s = feat_s[j].unsqueeze(0)
-                    anc_feat_t = feat_t[j].unsqueeze(0)
-                    cons_feat_s = feat_s[j+1:]
-                    cons_feat_t = feat_t[j+1:]
-                    repeat_num = args.feat_const_batch - 1 - j
-                    if repeat_num > 1:
+                        unfold_feat_t = F.unfold(feat_t, (32, 32), stride=32)
+                        unfold_feat_t = unfold_feat_t.resize(4, 256, 32, 32, 16)
+                        feat_s = unfold_feat_s
+                        feat_t = unfold_feat_t
+                    
+                    for j in range(args.feat_const_batch - 1):
+                        anc_feat_s = feat_s[j].unsqueeze(0)
+                        anc_feat_t = feat_t[j].unsqueeze(0)
+                        cons_feat_s = feat_s[j+1:]
+                        cons_feat_t = feat_t[j+1:]
+                        repeat_num = args.feat_const_batch - 1 - j
+                        if repeat_num > 1:
+                            if feat_size_ori >= 64:
+                                anc_feat_s = anc_feat_s.repeat(repeat_num, 1, 1, 1, 1)
+                                anc_feat_t = anc_feat_t.repeat(repeat_num, 1, 1, 1, 1)
+                            else:
+                                anc_feat_s = anc_feat_s.repeat(repeat_num, 1, 1, 1)
+                                anc_feat_t = anc_feat_t.repeat(repeat_num, 1, 1, 1)
+                        anc_feat = torch.cat([anc_feat_s, anc_feat_t])
+                        cons_feat = torch.cat([cons_feat_s, cons_feat_t])
                         if feat_size_ori >= 64:
-                            anc_feat_s = anc_feat_s.repeat(repeat_num, 1, 1, 1, 1)
-                            anc_feat_t = anc_feat_t.repeat(repeat_num, 1, 1, 1, 1)
-                        else:
-                            anc_feat_s = anc_feat_s.repeat(repeat_num, 1, 1, 1)
-                            anc_feat_t = anc_feat_t.repeat(repeat_num, 1, 1, 1)
-                    anc_feat = torch.cat([anc_feat_s, anc_feat_t])
-                    cons_feat = torch.cat([cons_feat_s, cons_feat_t])
-                    if feat_size_ori >= 64:
-                        anc_feat = anc_feat.permute(0, 4, 1, 2, 3)
-                        anc_feat_size = anc_feat.size()
-                        anc_feat = anc_feat.reshape(anc_feat_size[0]*anc_feat_size[1], anc_feat_size[2], anc_feat_size[3], anc_feat_size[4])
-                        cons_feat = cons_feat.permute(0, 4, 1, 2, 3)
-                        cons_feat = cons_feat.reshape(anc_feat_size[0]*anc_feat_size[1], anc_feat_size[2], anc_feat_size[3], anc_feat_size[4])
-                    anc_feat = anc_feat.view(anc_feat.size(0), anc_feat.size(1), -1).permute(0, 2, 1)
-                    cons_feat = cons_feat.view(cons_feat.size(0), cons_feat.size(1), -1)
-                    #if feat_size_ori == 128:
-                    #    print(cons_feat.size())
-                    corr = anc_feat.matmul(cons_feat)
-                    #corr = corr.view(corr.size(0), -1)
-                    mult = corr.size(2)
-                    corr = F.softmax(corr, dim=2)
-                    corr_list = torch.chunk(corr, 2, dim=0)
-                    loss_sp_inter_sim += Loss_fn(corr_list[0], corr_list[1]) * (args.feat_const_batch - 1 - j) * mult  
-                    #print(loss_sp_inter_sim)
-                    #exit()
-                    #print(loss_sp_inter_sim)
-                    #print(anc_feat.size(), cons_feat.size())
-                if feat_size_ori == 128: break
-            loss_sp_inter_sim = loss_sp_inter_sim / 6
-            #print(loss_sp_inter_sim)
-        if args.sp_inter_sim != 'None' and (i-1) % 4 == 0:
-            #print(loss_sp_inter_sim)
-            #print(loss_sp_inter_sim)
-            g_loss = g_loss + loss_sp_inter_sim * 0.4
+                            anc_feat = anc_feat.permute(0, 4, 1, 2, 3)
+                            anc_feat_size = anc_feat.size()
+                            anc_feat = anc_feat.reshape(anc_feat_size[0]*anc_feat_size[1], anc_feat_size[2], anc_feat_size[3], anc_feat_size[4])
+                            cons_feat = cons_feat.permute(0, 4, 1, 2, 3)
+                            cons_feat = cons_feat.reshape(anc_feat_size[0]*anc_feat_size[1], anc_feat_size[2], anc_feat_size[3], anc_feat_size[4])
+                        anc_feat = anc_feat.view(anc_feat.size(0), anc_feat.size(1), -1).permute(0, 2, 1)
+                        cons_feat = cons_feat.view(cons_feat.size(0), cons_feat.size(1), -1)
+                        corr = anc_feat.matmul(cons_feat)
+                        mult = corr.size(2)
+                        corr = F.softmax(corr, dim=2)
+                        corr_list = torch.chunk(corr, 2, dim=0)
+                        dis_corr_loss += Loss_fn(corr_list[0], corr_list[1]) * (args.feat_const_batch - 1 - j) * mult  
+
+                    if feat_size_ori == 128: break
+                dis_corr_loss = dis_corr_loss / 6 
+
+        if args.dis_corr_loss and args.self_corr_loss and i % args.dis_corr_freq == 0:
+            g_loss = g_loss + dis_corr_loss * 0.4
+        elif args.dis_corr_loss and not args.self_corr_loss:
+            g_loss = g_loss + dis_corr_loss * 0.4
+            
         loss_dict["g"] = g_loss
-        #loss_dict["r1"] = loss_sp_inter_sim
         generator.zero_grad()
         g_loss.backward()
         g_optim.step()
@@ -528,17 +535,22 @@ def train(args, loader, generator, discriminator, extra, g_optim, d_optim, e_opt
 
         # to save up space
         del g_loss, d_loss, fake_img, fake_pred, real_img, real_pred
-        if args.self_sim_loss_new != 'None':
-            del loss_d, feat, feat_s, feat_t, self_sim, unfold_feat, _ 
-        if args.sp_inter_sim != 'None' and (i-1) % 4 == 0:
-            del corr, corr_list, feat_target, feat_source, \
-                anc_feat_s, anc_feat_t, cons_feat_s, cons_feat_t, anc_feat, cons_feat
+        if args.self_corr_loss:
+            del self_corr_loss, feat, feat_s, feat_t, self_sim, unfold_feat, _ 
+        if args.dis_corr_loss:
+            if not args.self_corr_loss:
+                del corr, corr_list, feat_target, feat_source, \
+                    anc_feat_s, anc_feat_t, cons_feat_s, cons_feat_t, anc_feat, cons_feat
+            else:
+                if i % args.dis_corr_freq == 0:
+                    del corr, corr_list, feat_target, feat_source, \
+                    anc_feat_s, anc_feat_t, cons_feat_s, cons_feat_t, anc_feat, cons_feat
         if g_regularize:
             path_batch_size = max(1, args.batch // args.path_batch_shrink)
             noise = mixing_noise(
                 path_batch_size, args.latent, args.mixing, device)
             if args.proj != 'None':
-                w = [generator.module.style(item) for item in noise]
+                w = [generator.module.style(z)]
             #w = [generator.module.style(item) for item in noise]
                 w = [Proj_module.modulate(item) for item in w]
                 fake_img, latents = generator(w, input_is_latent=True, return_latents=True)
@@ -606,9 +618,8 @@ def train(args, loader, generator, discriminator, extra, g_optim, d_optim, e_opt
             if i % args.img_freq == 0:
                 with torch.set_grad_enabled(False):
                     g_ema.eval()
-                    if args.proj != 'None':
+                    if args.proj:
                         w = [g_ema.module.style(sample_z.data)]
-            #w = [generator.module.style(item) for item in noise]
                         w = [Proj_module.modulate(item) for item in w]
                         sample, _ = g_ema(w, input_is_latent=True)
                     else:
@@ -622,7 +633,6 @@ def train(args, loader, generator, discriminator, extra, g_optim, d_optim, e_opt
                         range=(-1, 1),
                     )
                     del sample
-
             if (i % args.save_freq == 0) and (i > 0):
                 torch.save(
                     {
@@ -637,7 +647,6 @@ def train(args, loader, generator, discriminator, extra, g_optim, d_optim, e_opt
                     },
                     f"%s/{str(i).zfill(6)}.pt" % (model_path),
                 )
-
             if i == args.iter - 2:
                 torch.save(
                     {
@@ -652,6 +661,7 @@ def train(args, loader, generator, discriminator, extra, g_optim, d_optim, e_opt
                     },
                     f"%s/final.pt" % (model_path),
                 )
+
 
 
 
@@ -693,13 +703,14 @@ if __name__ == "__main__":
     parser.add_argument("--ada_target", type=float, default=0.6)
     parser.add_argument("--ada_length", type=int, default=500 * 1000)
     parser.add_argument("--n_train", type=int, default=10)
-    parser.add_argument("--self_sim_loss_new", type=str, default='None')
-    parser.add_argument("--sp_inter_sim", type=str, default='None')
-    parser.add_argument("--proj", type=str, default='None')
-    parser.add_argument("--inter_sim_freq", type=int, default=2)
-    parser.add_argument('--exp_name', type=str, default='van_gogh')
+    parser.add_argument("--self_corr_loss", action="store_true", help="Add self corr")
+    parser.add_argument("--dis_corr_loss", action="store_true", help="Add dis corr")
+    parser.add_argument("--proj", action="store_true", default='Add proj')
+    parser.add_argument("--dis_corr_freq", type=int, default=6)
+    parser.add_argument('--exp_name', type=str, default='VanGogh')
     parser.add_argument('--task', type=int, default=10)
     parser.add_argument('--few_shot_batch', type=int, default=4)
+    parser.add_argument('--latent_dir', type=str, default='./latent/')
         
     args = parser.parse_args()
 
@@ -770,13 +781,9 @@ if __name__ == "__main__":
             pass
 
 
-        #generator.load_state_dict(ckpt["g"], strict=False)
         g_source.load_state_dict(ckpt_source["g_ema"], strict=False)
         generator.load_state_dict(ckpt_source["g_ema"], strict=False)
         g_ema.load_state_dict(ckpt["g_ema"], strict=False)
-
-        #d_source = nn.parallel.DataParallel(d_source)
-        #discriminator = nn.parallel.DataParallel(discriminator)
         discriminator.load_state_dict(ckpt["d"])
         d_source.load_state_dict(ckpt_source["d"])
 
