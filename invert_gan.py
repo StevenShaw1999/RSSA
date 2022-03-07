@@ -21,7 +21,9 @@ parser.add_argument('--expdir', type=str, default='exps', help='dirs of experime
 parser.add_argument('--stylegan2_path', type=str, default='data/stylegan2-ffhq-config-f.pt', help='path of pretrianed stylegan model')
 parser.add_argument('--iter_num', type=int, default=4002, help='iteration steps')
 parser.add_argument('--learning_rate', type=float, default=1e-1, help='learning rate')
-
+parser.add_argument('--image_dir', type=str, default='data/', help='path to inverted images')
+parser.add_argument('--latent_dir', type=str, default='latent/', help='path to inverted images')
+args = parser.parse_args()
 
 def preprocess(images, channel_order='RGB'):
     """Preprocesses the input images if needed.
@@ -53,6 +55,7 @@ def preprocess(images, channel_order='RGB'):
 class Invertor():
     def __init__(self,options):
         self.options = options
+        self.Up = nn.Upsample(256)
         self.device = torch.device('cuda')
         self.exppath = os.path.join(self.options.expdir, self.options.expname)
         os.makedirs(self.exppath, exist_ok=True)
@@ -61,13 +64,12 @@ class Invertor():
         self.G = Generator(256, 512, 8, channel_multiplier=2
         ).to(self.device)
 
-        ckpt_source = torch.load('checkpoints_ori/source_ffhq.pt', map_location=lambda storage, loc: storage)
+        ckpt_source = torch.load(args.stylegan2_path, map_location=lambda storage, loc: storage)
         self.G.load_state_dict(ckpt_source["g_ema"], strict=False)
 
         
         with torch.no_grad():
             self.find_avg_latent()
-        #self.avg_latent = torch.randn((1,512)).to(self.device)
         self.avg_latent = self.avg_latent.view(1, 1, -1).clone()
         self.avg_latent = self.avg_latent.repeat(1, self.G.n_latent, 1)
 
@@ -75,7 +77,6 @@ class Invertor():
         self.image_transforms = transforms.Compose([
                                     transforms.Resize((256, 256)),
                                     transforms.ToTensor()])
-                                    #transforms.Normalize([0.5, 0.5, 0.5], [0.5, 0.5, 0.5])])
         
         # setup criterion
         self.lpips_criterion = LPIPS(net='vgg').to(self.device).eval()
@@ -85,15 +86,7 @@ class Invertor():
         self.avg_latent = torch.randn((5120,512)).to(self.device)
         with torch.no_grad():
             self.avg_latent = torch.mean(self.G.style(self.avg_latent), dim=0, keepdim=True)
-    def load_stylegan2_G(self,):
-        """load stylegan2 generator"""
-        ckpt = torch.load(self.options.stylegan2_path)
-        self.G = Generator(1024, style_dim=512, n_mlp=8)
-        self.G.load_state_dict(ckpt['g_ema'], strict=True)
-        self.G.eval()
-        # suppose we only use one GPU card
-        self.G.to(self.device)
-        self.mean_latent = ckpt['latent_avg'].to(self.device).repeat(1,18,1)
+
 
 
     def write_summaries(self, results, step):
@@ -108,6 +101,7 @@ class Invertor():
     def read_image(self, imagename):
         image = cv2.imread(imagename)
         image_target = torch.from_numpy(preprocess(image[np.newaxis, :], channel_order='BGR')).cuda()
+        image_target = self.Up(image_target)
         return image_target
     
 
@@ -134,28 +128,17 @@ class Invertor():
 
 
     def run(self,):
-        #Up = nn.Upsample((256, 256), mode='bicubic')
-        image_list = os.listdir('raw_data/Amedeo/images/')
+        image_list = os.listdir(args.image_dir)
+        
         for i in range(5, 10):
-            print('raw_data/Amedeo/images/' + image_list[i])
-            image = self.read_image('raw_data/Amedeo/images/' + image_list[i])
-            #image = Up(image)
-            #latentcode = self.initial_latentcode(latent_type='mean_ckpt')
+            print(args.image_dir + image_list[i])
+            image = self.read_image(args.image_dir + image_list[i])
             self.avg_latent_sub = self.avg_latent.clone()
             self.avg_latent_sub.requires_grad = True
             optimizer = torch.optim.Adam([self.avg_latent_sub], lr=self.options.learning_rate)
             scheduler = torch.optim.lr_scheduler.StepLR(optimizer, 1000, gamma=0.5)
             for step in tqdm(range(self.options.iter_num)):
                 decoded_image, _ = self.G([self.avg_latent_sub], input_is_latent=True, return_latents=True, randomize_noise=False)
-                #decoded_image = F.interpolate(decoded_image, size=(256, 256), mode='bicubic')
-                #print(decoded_image.size())
-                #print(torch.min(decoded_image), torch.max(decoded_image))
-                #decoded_image = decoded_image.clamp_(min=-1, max=1)
-            
-                #print(torch.min(decoded_image), torch.max(decoded_image))
-                #decoded_image = decoded_image.sub_(-1).div_(2)
-                #print(torch.min(decoded_image), torch.max(decoded_image))
-                #exit()
                 lpipsloss = self.lpips_criterion(decoded_image, image)
                 mseloss = self.MSE_criterion(decoded_image, image)
 
@@ -167,12 +150,13 @@ class Invertor():
 
                 dataitems = {'lpipsloss': lpipsloss, 
                             'mseloss': mseloss}
-                if step % 1000 == 0 or step == self.options.iter_num:
+                if step % 500 == 0 or step == self.options.iter_num:
                     self.write_summaries(dataitems, step)
+                    #print(step)
                     decoded_image_np = self.tensor2numpy(decoded_image)
                     decoded_image_np = Image.fromarray(decoded_image_np[0])
-                    decoded_image_np.save(f'exps/Amedeo/{i}/{step}.png')
-                    np.save('exps/Amedeo/' + str(i) + '/latentcode.npy', self.avg_latent_sub.detach().cpu().numpy())
+                    decoded_image_np.save(args.latent_dir + f'images/{i}.png')
+                    np.save(args.latent_dir + f'latent/{i}_latentcode.npy', self.avg_latent_sub.detach().cpu().numpy())
         print('Finished')
             
 
