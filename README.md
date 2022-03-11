@@ -4,6 +4,10 @@
 ## Generating & Testing
 We provide the pre-trained models for different source and target GAN models. Download the model from this Google Drive link. Store the source model into the `./checkpoints_ori` directory and the target model into the `./checkpoints` directory.
 
+### Generate
+To generate images from a pre-trained GAN, run the following command:
+
+
 
 
 
