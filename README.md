@@ -1,10 +1,10 @@
 
 # Few Shot Generative Model Adaption via Relaxed Spatial Structural Alignment
 
-## Testing
+## Generating & Testing
 We provide the pre-trained models for different source and target GAN models. Download the model from this Google Drive link. Store the source model into the `./checkpoints_ori` directory and the target model into the `./checkpoints` directory.
 
-Download the pre-trained model(s), and store it into `./checkpoints_ori` directory.
+
 
 
 ## Training (adapting) your own GAN
