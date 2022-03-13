@@ -5,8 +5,10 @@
 We provide the pre-trained models for different source and target GAN models. Download the model from this Google Drive link. Store the source model into the `./checkpoints_ori` directory and the target model into the `./checkpoints` directory.
 
 ### Generate
-To generate images from a pre-trained GAN, run the following command:
-
+To generate images from a pre-trained source GAN and target GAN, run the following command:
+```bash
+CUDA_VISIBLE_DEVICES=0 python generate.py --ckpt_source /path/to/source_model/ --ckpt_target /path/to/target_model/ --task 10(5) --source source_domain --target target_domain --latent_dir /path/to/latent/ --mode viz_imgs
+```
 
 
 
