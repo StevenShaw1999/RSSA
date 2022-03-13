@@ -61,7 +61,9 @@ CUDA_VISIBLE_DEVICES=0 python eval.py --mode SCS --img_pth eval_SCS/church2VanGo
 
 
 ## Training (adapting) your own GAN
-First invert the training images using `invert_gan.py`, you need to change the path in the scripts according to your own environments.
+### GAN inversion
+First invert the training images using `invert_gan.py`, we also provide inverted latent code in the `./latent/` directory. The image2stylegan code base in this repo does not guarantee good reconstruction performance (shown in the `latent/target_domain/images`), you can use your own inversion method if you get better results. For example:
+
 ### Running examples
 ```bash
 CUDA_VISIBLE_DEVICES=0 python train_church_proj.py --size 256 --ckpt checkpoints_ori/church.pt --data_path processed_data/vangogh_houses10/ --exp church_to_van_gogh_10_scc_proj_dcc --iter 2502 --n_train 10 --task 10 --exp_name van_gogh --proj Yes --self_sim_loss_new Yes --sp_inter_sim Yes
