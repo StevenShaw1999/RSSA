@@ -99,4 +99,4 @@ CUDA_VISIBLE_DEVICES=0 python train_face_proj.py --ckpt /checkpoints_ori/face.pt
 ```
 This will save the intermediate checkpoint in the `./checkpoints/face2sketches_self_dis_proj_5` directory and the intermediate samples in the `./samples/face2sketches_self_dis_proj_5` directory.
 
-Note that the spatial alignment is GPU memory consuming, runnig the above code with default configurations will cost 24 GB GPU memory. We run all of our experiments on one NVIDIA RTX 3090 GPU. Modifying the scale of self corr loss and dis corr loss may help reduce the spatial complexity.
+**Note**  that the spatial alignment is GPU memory consuming, runnig the above code with default configurations will cost 24 GB GPU memory. We run all of our experiments on one NVIDIA RTX 3090 GPU. Modifying the scale of self corr loss and dis corr loss may help reduce the spatial complexity.
