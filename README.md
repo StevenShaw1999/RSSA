@@ -2,9 +2,9 @@
 # Few Shot Generative Model Adaption via Relaxed Spatial Structural Alignment
 
 ## Overview
-<img src='imgs/method_diagram.png' width="840px"/>
+<img src='overview/overview.png'/>
 
-Our method helps adapt the source GAN where one-to-one correspondence is preserved between the source G<sub>s</sub>(z) and target G<sub>t</sub>(z) images.
+Our RSSA method help align the spatial structural information between source and target GAN to assist adaption.
 
 ## Requirements
 
