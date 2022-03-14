@@ -1,6 +1,21 @@
 
 # Few Shot Generative Model Adaption via Relaxed Spatial Structural Alignment
 
+## Overview
+<img src='imgs/method_diagram.png' width="840px"/>
+
+Our method helps adapt the source GAN where one-to-one correspondence is preserved between the source G<sub>s</sub>(z) and target G<sub>t</sub>(z) images.
+
+## Requirements
+
+**Note:** The base code of the training pipeline is taken from [few-shot-gan-adaption](https://github.com/utkarshojha/few-shot-gan-adaptation)'s implementation from [@Utkarsh Ojha](https://utkarshojha.github.io/)
+
+- Linux
+- NVIDIA GPU + CUDA CuDNN 11.1
+- PyTorch 1.9.1
+- Python 3.9.1
+- Install all the libraries through `pip install -r requirements.txt` 
+
 ## Generating & Testing
 We provide the pre-trained models for different source and target GAN models. Download the model from this Google Drive link. Store the source model into the `./checkpoints_ori` directory and the target model into the `./checkpoints` directory.
 
