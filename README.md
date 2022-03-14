@@ -73,18 +73,15 @@ First invert the training images using `invert_gan.py`, we also provide inverted
 CUDA_VISIBLE_DEVICES=0 python invert_gan.py --image_dir data/caricatures/images/ --stylegan2_path checkpoints_ori/face.pt --latent_dir latent/caricatures/
 ```
 
-### Running examples
+### Training
+Train your own GAN via commanding as follow. 
 ```bash
-CUDA_VISIBLE_DEVICES=0 python train_church_proj.py --size 256 --ckpt checkpoints_ori/church.pt --data_path processed_data/vangogh_houses10/ --exp church_to_van_gogh_10_scc_proj_dcc --iter 2502 --n_train 10 --task 10 --exp_name van_gogh --proj Yes --self_sim_loss_new Yes --sp_inter_sim Yes
+CUDA_VISIBLE_DEVICES=0 python train_face_proj.py --ckpt /path/to/source/model/ --data_path /path/to/processed/data/ --exp source2target --iter 2002 --self_corr_loss --proj --dis_corr_loss --latent_dir /path/to/latent/ --task 10(5) --exp_name target_domain --n_train 10
 ```
-
-### Sample images from a model
-
-To generate images from a pre-trained GAN, run the following command:
-
+For example:
 ```bash
-CUDA_VISIBLE_DEVICES=0 python generate.py --ckpt_target /path/to/target_model/ --ckpt_source /path/to/source_model/ --exp_name van_gogh --source church --task 10
+CUDA_VISIBLE_DEVICES=0 python train_face_proj.py --ckpt /checkpoints_ori/face.pt --data_path ./processed_data/sketches_5/  --exp face2sketches --iter 2002 --self_corr_loss --proj --dis_corr_loss --latent_dir latent/sketches/latent/ --task 5 --exp_name sketches
 ```
+This will save the intermediate checkpoint in the `./checkpoints/face2sketches_self_dis_proj_5` directory and the intermediate samples in the `./samples/face2sketches_self_dis_proj_5` directory.
 
-This will save the images in the `test_samples/` directory.
-
+Note that the spatial alignment is GPU memory consuming, runnig the above code with default configurations will cost 24 GB GPU memory. We run all of our experiments on one NVIDIA RTX 3090 GPU. Modifying the scale of self corr loss and dis corr loss may help reduce the spatial complexity.
