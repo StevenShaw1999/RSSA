@@ -12,7 +12,7 @@ CUDA_VISIBLE_DEVICES=0 python generate.py --ckpt_source /path/to/source_model/ -
 
 This will save synthesis samples into `./viz_img` directory. Use the `--load_noise` option to use the noise vectors used for some samples shown in the main paper. For example:
 ```bash
-CUDA_VISIBLE_DEVICES=0 python generate.py --ckpt_source ./checkpoints_ori/source_ffhq.pt --ckpt_target ./checkpoints/face2sketches_self_dis_proj_10/final.pt --task 10 --source face --target sketches --latent_dir latent/sketches/latent/ --mode viz_imgs --load_noise noise.pt
+CUDA_VISIBLE_DEVICES=0 python generate.py --ckpt_source ./checkpoints_ori/face.pt --ckpt_target ./checkpoints/face2sketches_self_dis_proj_10/final.pt --task 10 --source face --target sketches --latent_dir latent/sketches/latent/ --mode viz_imgs --load_noise noise.pt
 ```
 
 ### Generate interpolation images
@@ -23,7 +23,7 @@ CUDA_VISIBLE_DEVICES=0 python generate.py --ckpt_source /path/to/source_model --
 
 This will save synthesis interpolation images (for source and target) into `./viz_gif` directory. For example:
 ```bash
-CUDA_VISIBLE_DEVICES=0 python generate.py --ckpt_source ./checkpoints_ori/source_ffhq.pt --ckpt_target ./checkpoints/face2VanGogh_self_dis_proj_10/final.pt --task 10 --source face --target VanGogh --latent_dir latent/VanGogh_face/latent/ --mode viz_gif
+CUDA_VISIBLE_DEVICES=0 python generate.py --ckpt_source ./checkpoints_ori/face.pt --ckpt_target ./checkpoints/face2VanGogh_self_dis_proj_10/final.pt --task 10 --source face --target VanGogh --latent_dir latent/VanGogh_face/latent/ --mode viz_gif
 ```
 
 ### Evaluating Inception Score
@@ -61,8 +61,17 @@ CUDA_VISIBLE_DEVICES=0 python eval.py --mode SCS --img_pth eval_SCS/church2VanGo
 
 
 ## Training (adapting) your own GAN
+### Data preparation
+The raw images are saved in the `./data/` directory, and the processed images are saved in the `./processed_data/` directory. If you want to train model on your own data, save them in `./data/` and run `prepare_data.py` to preprocess your raw data as follow:
+
+- `python prepare_data.py --out processed_data/<dataset_name> --size 256 ./data/<dataset_name>`
+
 ### GAN inversion
 First invert the training images using `invert_gan.py`, we also provide inverted latent code in the `./latent/` directory. The image2stylegan code base in this repo does not guarantee good reconstruction performance (shown in the `latent/target_domain/images`), you can use your own inversion method if you get better results. For example:
+
+```bash
+CUDA_VISIBLE_DEVICES=0 python invert_gan.py --image_dir data/caricatures/images/ --stylegan2_path checkpoints_ori/face.pt --latent_dir latent/caricatures/
+```
 
 ### Running examples
 ```bash
