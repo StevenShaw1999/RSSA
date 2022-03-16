@@ -32,8 +32,11 @@ def inception_score(img_dir, batch_size=100, resize=False, splits=1):
     splits -- number of splits
     """
     dat = []
-    N = 1000
+    N = len(os.listdir(args.img_pth))
+    print('%d images to be evaluated' % N)
     for i in range(N):
+        if i % 100 == 0:
+            print(i)
         img = np.array(Image.open(img_dir +'/img'+str(i) +'.png'))
         img = torch.from_numpy(img)
         img = img.permute(2, 0, 1).unsqueeze(0)
@@ -59,7 +62,7 @@ def inception_score(img_dir, batch_size=100, resize=False, splits=1):
     preds = np.zeros((N, 1000))
 
     for i in range(int(N / batch_size)):
-        batch = dat[i* int(N / 10): (i+1) * int(N / 10), :, :, :].cuda()
+        batch = dat[i* batch_size: (i+1) * batch_size, :, :, :].cuda()
         
         #batchv = Variable(batch)
         batch_size_i = batch.size()[0]
@@ -154,10 +157,9 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
     if args.mode == 'IS':
-        IS_mean, IS_std = inception_score(args.img_pth, batch_size=100, resize=False, splits=5)
+        IS_mean, IS_std = inception_score(args.img_pth, batch_size=100, resize=False, splits=10)
         print('Inception score: %.2f' % IS_mean)
     
     if args.mode == 'SCS':
         HED_net = HED_Network().cuda().eval()
         SCS_eval(args, HED_net)
-        exit()
