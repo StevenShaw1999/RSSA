@@ -17,7 +17,7 @@ Our RSSA method help align the spatial structural information between source and
 - Install all the libraries through `pip install -r requirements.txt` 
 
 ## Generating & Testing
-We provide the pre-trained models for different source and target GAN models. Download the model from [RSSA](https://drive.google.com/drive/folders/1v3Ge9uGqY294vFqcwqQIgznxgtrej6bm?usp=sharing). Store the source model into the `./checkpoints_ori` directory and the target model into the `./checkpoints` directory.
+We provide the pre-trained models for different source and target GAN models. Download the model from [Here!](https://drive.google.com/drive/folders/1v3Ge9uGqY294vFqcwqQIgznxgtrej6bm?usp=sharing). Store the source model into the `./checkpoints_ori` directory and the target model into the `./checkpoints` directory.
 
 ### Generate images
 To generate images from a pre-trained source GAN and target GAN, run the following command:
