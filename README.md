@@ -4,7 +4,7 @@
 ## Overview
 <img src='overview/overview.png'/>
 
-Our RSSA method help align the spatial structural information between source and target GAN to assist adaption.
+Our RSSA method help align the spatial structural information between source and target GAN to assist adaption. Paper link is [here](https://arxiv.org/abs/2203.04121).
 
 ## Requirements
 
