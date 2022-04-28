@@ -989,163 +989,52 @@ class Inject_proj(nn.Module):
 class Projection_module():
     def __init__(self, args):
         super().__init__()
-        if args.exp_name == 'sketches':
-            latent_dir = 'exps' 
-        if args.exp_name == 'van_gogh': latent_dir = 'exps/van_gogh_face'
-        if args.exp_name == 'wushi': latent_dir = 'exps/wushi'
-        if args.exp_name == 'Amedeo': latent_dir = 'exps/Amedeo'
-        if args.exp_name == 'cari': latent_dir = 'exps/face_caricature'
-        if args.exp_name == 'raphael': latent_dir = 'exps/raphael'
-        #print(latent_dir)
-        if args.task == 10:
-            hh = range(10)
-        if args.task == 5:
-            if args.exp_name == 'sketches': hh = [0, 2, 5, 6, 8]
-            elif args.exp_name == 'cari': hh = [1, 3, 4, 6, 8]
-            else: hh = [1, 2, 4, 5, 8]
 
-        if args.task == 1:
-            if args.exp_name == 'sketches': hh = [2]
-            else: hh = [1]
-        
-        if args.task == 2:
-            if args.exp_name == 'sketches': hh = [6, 7]
-            else: hh = [0]
+        latent_dir = args.latent_dir
+        if args.task == 10:
+            if args.exp_name == 'VanGogh':
+                choose_idx = range(9)
+            else:
+                choose_idx = range(10)
+        if args.task == 5:
+            if args.exp_name == 'sketches': choose_idx = [0, 2, 5, 6, 8]
+            elif args.exp_name == 'caricatures': choose_idx = [1, 3, 4, 6, 8]
+            elif args.exp_name == 'VanGogh': choose_idx = [1,2,3,4,7]
+            else: choose_idx = [0, 1, 2, 3, 4]
 
         catt = []
-        #print(hh, latent_dir)
-        #exit()
-        #print(hh, args.exp_name)
-        #exit()
-        for i in hh:
-            arr = np.load(f'%s/{i}/latentcode.npy'%latent_dir)
+        for i in choose_idx:
+            arr = np.load(f'%s{i}_latentcode.npy' % latent_dir)
             catt.append(arr)
-        catt = torch.from_numpy(np.concatenate(catt)).cuda()
-        #print(catt.size())
-        #exit()
 
+        catt = torch.from_numpy(np.concatenate(catt)).cuda()
         self.catt_ori = catt.permute(1, 2, 0)
         self.catt_t = catt.permute(1, 0, 2)
         self.inv_mat = torch.inverse(torch.matmul(self.catt_t, self.catt_ori))
         self.compute_mat = self.inv_mat.matmul(self.catt_t).unsqueeze(0)
-#exit() 
-        #p1 samples/ffhq_to_sketches_ss_new_freeze_proj
-        """sub = torch.ones(1, 14, 1).cuda() * 0.15
-        for i in range(14):
-            sub[:, i, :] += 0.45 / 14 * i"""
-        """p2
-        sub = torch.ones(1, 14, 1).cuda() * 0.1
-        for i in range(14):
-            sub[:, i, :] += 0.55 / 14 * i
-
-        self.sub_ori = sub"""
-
-        # p3 samples/ffhq_to_sketches_ss_new_proj_500_ver1
-        """sub = torch.ones(1, 14, 1).cuda() * 0.1
-        for i in range(3, 5):
-            sub[:, i, :] += 0.05
-        for i in range(5, 7):
-            sub[:, i, :] += 0.25
-        for i in range(7, 9):
-            sub[:, i, :] += 0.5
-        for i in range(9, 11):
-            sub[:, i, :] += 0.6
-        for i in range(11, 14):
-            sub[:, i, :] += 0.7 """
-
-        # p3 samples/ffhq_to_sketches_ss_new_proj_800
-        """sub = torch.ones(1, 14, 1).cuda() * 0.1
-        for i in range(3, 5):
-            sub[:, i, :] += 0.05
-        for i in range(5, 7):
-            sub[:, i, :] += 0.2
-        for i in range(7, 9):
-            sub[:, i, :] += 0.35
-        for i in range(9, 11):
-            sub[:, i, :] += 0.5
-        for i in range(11, 14):
-            sub[:, i, :] += 0.65"""
-
-
-        # p3 samples/ffhq_to_sketches_ss_new_proj_900
-        """sub = torch.ones(1, 14, 1).cuda() * 0.1
-        for i in range(3, 5):
-            sub[:, i, :] += 0.1
-        for i in range(5, 7):
-            sub[:, i, :] += 0.25
-        for i in range(7, 9):
-            sub[:, i, :] += 0.35
-        for i in range(9, 11):
-            sub[:, i, :] += 0.45
-        for i in range(11, 14):
-            sub[:, i, :] += 0.55"""
-        # for most exp
-        """sub = torch.ones(1, 14, 1).cuda() * 0.1
-        for i in range(3, 5):
-            sub[:, i, :] += 0.15
-        for i in range(5, 7):
-            sub[:, i, :] += 0.3
-        for i in range(7, 9):
-            sub[:, i, :] += 0.45
-        for i in range(9, 11):
-            sub[:, i, :] += 0.6
-        for i in range(11, 14):
-            sub[:, i, :] += 0.7"""
-
-        """
-        sub = torch.ones(1, 14, 1).cuda() * 0.1
-        for i in range(3, 5):
-            sub[:, i, :] += 0.2
-        for i in range(5, 7):
-            sub[:, i, :] += 0.5
-        for i in range(7, 9):
-            sub[:, i, :] += 0.6
-        for i in range(9, 11):
-            sub[:, i, :] += 0.6
-        for i in range(11, 14):
-            sub[:, i, :] += 0.7"""
         sub = torch.zeros(1, 14, 1).cuda() 
-        if args.task != 2:
-            for i in range(3, 5):
-                sub[:, i, :] += 0.05
-            for i in range(5, 7):
-                sub[:, i, :] += 0.07
-            for i in range(7, 9):
-                sub[:, i, :] += 0.3
-            for i in range(9, 11):
-                sub[:, i, :] += 0.7
-            for i in range(11, 14):
-                sub[:, i, :] += 0.9    
-        else:
-            for i in range(3, 5):
-                sub[:, i, :] += 0.05
-            for i in range(5, 7):
-                sub[:, i, :] += 0.05
-            for i in range(7, 9):
-                sub[:, i, :] += 0.4
-            for i in range(9, 11):
-                sub[:, i, :] += 0.8
-            for i in range(11, 14):
-                sub[:, i, :] += 0.9   
+
+        for i in range(3, 5):
+            sub[:, i, :] += 0.05
+        for i in range(5, 7):
+            sub[:, i, :] += 0.05
+        for i in range(7, 9):
+            sub[:, i, :] += 0.45
+        for i in range(9, 11):
+            sub[:, i, :] += 0.65
+        for i in range(11, 14):
+            sub[:, i, :] += 0.85    
+
         self.sub_ori = sub
         self.sub = sub
-        #print(sub)
-        #exit()
-    
-    def adjust_sub(self, total_iter, n_iter):
-        self.sub_ori = max(0, (0.2 + 0.8 * (1 - n_iter / total_iter))) * self.sub
 
     def modulate(self, inp):
         if inp.ndim < 3:
             inp = inp.unsqueeze(1).repeat(1, 14, 1)
         alpha = self.compute_mat.matmul(inp.unsqueeze(-1))
-        #print(alpha.size(), catt_ori.unsqueeze(0).size())
         orth = self.catt_ori.unsqueeze(0).matmul(alpha).squeeze(-1)
         orth = orth / torch.norm(orth, dim=2, keepdim=True) * torch.norm(inp, dim=2, keepdim=True)
-        #hh = self.catt_ori.mean(dim=2).unsqueeze(0)
-        #hh = hh / torch.norm(hh, dim=2, keepdim=True) * torch.norm(inp, dim=2, keepdim=True)
         inp = self.sub_ori * orth + (1-self.sub_ori) * inp
-        #print(hh.size())
         return inp
 
 
@@ -1163,57 +1052,6 @@ class Projection_module_diff(nn.Module):
         self.inv_mat = torch.inverse(torch.matmul(self.catt_t, self.catt_ori))
         self.compute_mat = self.inv_mat.matmul(self.catt_t).unsqueeze(0)
         self.compute_mat = nn.Parameter(self.compute_mat, requires_grad=True)
-#exit() 
-        #p1 samples/ffhq_to_sketches_ss_new_freeze_proj
-        """sub = torch.ones(1, 14, 1).cuda() * 0.15
-        for i in range(14):
-            sub[:, i, :] += 0.45 / 14 * i"""
-        """p2
-        sub = torch.ones(1, 14, 1).cuda() * 0.1
-        for i in range(14):
-            sub[:, i, :] += 0.55 / 14 * i
-
-        self.sub_ori = sub"""
-
-        # p3 samples/ffhq_to_sketches_ss_new_proj_500_ver1
-        """sub = torch.ones(1, 14, 1).cuda() * 0.1
-        for i in range(3, 5):
-            sub[:, i, :] += 0.05
-        for i in range(5, 7):
-            sub[:, i, :] += 0.25
-        for i in range(7, 9):
-            sub[:, i, :] += 0.5
-        for i in range(9, 11):
-            sub[:, i, :] += 0.6
-        for i in range(11, 14):
-            sub[:, i, :] += 0.7 """
-
-        # p3 samples/ffhq_to_sketches_ss_new_proj_800
-        """sub = torch.ones(1, 14, 1).cuda() * 0.1
-        for i in range(3, 5):
-            sub[:, i, :] += 0.05
-        for i in range(5, 7):
-            sub[:, i, :] += 0.2
-        for i in range(7, 9):
-            sub[:, i, :] += 0.35
-        for i in range(9, 11):
-            sub[:, i, :] += 0.5
-        for i in range(11, 14):
-            sub[:, i, :] += 0.65"""
-
-
-        # p3 samples/ffhq_to_sketches_ss_new_proj_900
-        """sub = torch.ones(1, 14, 1).cuda() * 0.1
-        for i in range(3, 5):
-            sub[:, i, :] += 0.1
-        for i in range(5, 7):
-            sub[:, i, :] += 0.25
-        for i in range(7, 9):
-            sub[:, i, :] += 0.35
-        for i in range(9, 11):
-            sub[:, i, :] += 0.45
-        for i in range(11, 14):
-            sub[:, i, :] += 0.55"""
 
         sub = torch.ones(1, 14, 1).cuda() * 0.1
         for i in range(3, 5):
@@ -1250,163 +1088,37 @@ class Projection_module_diff(nn.Module):
 class Projection_module_church():
     def __init__(self, args):
         super().__init__()
-        if args.exp_name == 'van_gogh':
-            latent_dir = 'exps/van_gogh_house'
-        if args.exp_name == 'landscapes':
-            latent_dir = 'exps/landscapes'
-        if args.exp_name == 'haunted':
-            latent_dir = 'exps/haunted_house'
-        #print(latent_dir)
+        latent_dir = args.latent_dir
         if args.task == 10:
-            hh = range(10)
+            choose_idx = range(10)
         if args.task == 5:
-            if args.exp_name == 'van_gogh': hh = [0, 1, 3, 4, 7]
-            elif args.exp_name == 'landscapes': hh = [0, 2, 4, 6, 8]
-            elif args.exp_name == 'haunted': hh = [1, 2, 3, 6, 9]
-        
-        if args.task == 2:
-            if args.exp_name == 'van_gogh': hh = [2, 3, 4, 7, 9]
-            elif args.exp_name == 'landscapes': hh = [0, 2, 4, 6, 8]
-            elif args.exp_name == 'haunted': hh = [2, 6]
-        
-        if args.task == 1:
-            if args.exp_name == 'van_gogh': hh = [0]
-            elif args.exp_name == 'landscapes': hh = [0, 2, 4, 6, 8]
-            elif args.exp_name == 'haunted': hh = [6]
+            if args.exp_name == 'VanGogh': choose_idx = [0, 1, 3, 4, 7]
+            elif args.exp_name == 'haunted': choose_idx = [1, 2, 3, 6, 9]
 
         catt = []
-        #print(hh, args.exp_name, args.task)
-        #exit()
-        for i in hh:
-            arr = np.load(f'%s/{i}/latentcode.npy'%latent_dir)
+        for i in choose_idx:
+            arr = np.load(f'%s/{i}_latentcode.npy'%latent_dir)
             catt.append(arr)
         catt = torch.from_numpy(np.concatenate(catt)).cuda()
-        #print(catt.size())
-        #exit()
-        #print(catt.size(), hh, args.exp_name)
-        #exit()
         self.catt_ori = catt.permute(1, 2, 0)
         self.catt_t = catt.permute(1, 0, 2)
         self.inv_mat = torch.inverse(torch.matmul(self.catt_t, self.catt_ori))
         self.compute_mat = self.inv_mat.matmul(self.catt_t).unsqueeze(0)
-#exit() 
         sub = torch.zeros(1, 14, 1).cuda() 
-        if args.exp_name == 'van_gogh':
-            if args.task == 1 or args.task == 2:
-                for i in range(3, 5):
-                    sub[:, i, :] += 0.05
-                for i in range(5, 7):
-                    sub[:, i, :] += 0.05
-                for i in range(7, 9):
-                    sub[:, i, :] += 0.25
-                for i in range(9, 11):
-                    sub[:, i, :] += 0.35
-                for i in range(11, 14):
-                    sub[:, i, :] += 0.4  
-            
-            elif args.task == 5 or args.task == 10:
-                for i in range(3, 5):
-                    sub[:, i, :] += 0.05
-                for i in range(5, 7):
-                    sub[:, i, :] += 0.05
-                for i in range(7, 9):
-                    sub[:, i, :] += 0.25
-                for i in range(9, 11):
-                    sub[:, i, :] += 0.35
-                for i in range(11, 14):
-                    sub[:, i, :] += 0.45 
-
-            else :
-                for i in range(3, 5):
-                    sub[:, i, :] += 0.05
-                for i in range(5, 7):
-                    sub[:, i, :] += 0.07
-                for i in range(7, 9):
-                    sub[:, i, :] += 0.4
-                for i in range(9, 11):
-                    sub[:, i, :] += 0.8
-                for i in range(11, 14):
-                    sub[:, i, :] += 0.9    
-
-        if args.exp_name == 'haunted':
-            if args.task == 1 or args.task == 2:
-                for i in range(3, 5):
-                    sub[:, i, :] += 0.05
-                for i in range(5, 7):
-                    sub[:, i, :] += 0.07
-                for i in range(7, 9):
-                    sub[:, i, :] += 0.5
-                for i in range(9, 11):
-                    sub[:, i, :] += 0.6
-                for i in range(11, 14):
-                    sub[:, i, :] += 0.7  
-            
-            elif args.task == 5:
-                for i in range(3, 5):
-                    sub[:, i, :] += 0.05
-                for i in range(5, 7):
-                    sub[:, i, :] += 0.07
-                for i in range(7, 9):
-                    sub[:, i, :] += 0.4
-                for i in range(9, 11):
-                    sub[:, i, :] += 0.8
-                for i in range(11, 14):
-                    sub[:, i, :] += 0.9  
-
-            else :
-                for i in range(3, 5):
-                    sub[:, i, :] += 0.05
-                for i in range(5, 7):
-                    sub[:, i, :] += 0.07
-                for i in range(7, 9):
-                    sub[:, i, :] += 0.4
-                for i in range(9, 11):
-                    sub[:, i, :] += 0.8
-                for i in range(11, 14):
-                    sub[:, i, :] += 0.9    
-
-        if args.exp_name == 'landscapes':
-            if args.task == 1 or args.task == 2:
-                for i in range(3, 5):
-                    sub[:, i, :] += 0.05
-                for i in range(5, 7):
-                    sub[:, i, :] += 0.07
-                for i in range(7, 9):
-                    sub[:, i, :] += 0.5
-                for i in range(9, 11):
-                    sub[:, i, :] += 0.6
-                for i in range(11, 14):
-                    sub[:, i, :] += 0.7  
-            
-            elif args.task == 5:
-                for i in range(3, 5):
-                    sub[:, i, :] += 0.05
-                for i in range(5, 7):
-                    sub[:, i, :] += 0.07
-                for i in range(7, 9):
-                    sub[:, i, :] += 0.4
-                for i in range(9, 11):
-                    sub[:, i, :] += 0.8
-                for i in range(11, 14):
-                    sub[:, i, :] += 0.9  
-
-            else :
-                for i in range(3, 5):
-                    sub[:, i, :] += 0.05
-                for i in range(5, 7):
-                    sub[:, i, :] += 0.07
-                for i in range(7, 9):
-                    sub[:, i, :] += 0.4
-                for i in range(9, 11):
-                    sub[:, i, :] += 0.8
-                for i in range(11, 14):
-                    sub[:, i, :] += 0.9    
-
+        
+        for i in range(3, 5):
+            sub[:, i, :] += 0.05
+        for i in range(5, 7):
+            sub[:, i, :] += 0.05
+        for i in range(7, 9):
+            sub[:, i, :] += 0.35
+        for i in range(9, 11):
+            sub[:, i, :] += 0.55
+        for i in range(11, 14):
+            sub[:, i, :] += 0.75 
              
         self.sub_ori = sub
         self.sub = sub
-        #print(sub)
-        #exit()
     
     def adjust_sub(self, total_iter, n_iter):
         self.sub_ori = max(0, (0.2 + 0.8 * (1 - n_iter / total_iter))) * self.sub
@@ -1415,11 +1127,9 @@ class Projection_module_church():
         if inp.ndim < 3:
             inp = inp.unsqueeze(1).repeat(1, 14, 1)
         alpha = self.compute_mat.matmul(inp.unsqueeze(-1))
-        #print(alpha.size(), catt_ori.unsqueeze(0).size())
         orth = self.catt_ori.unsqueeze(0).matmul(alpha).squeeze(-1)
         orth = orth / torch.norm(orth, dim=2, keepdim=True) * torch.norm(inp, dim=2, keepdim=True)
         inp = self.sub_ori * orth + (1-self.sub_ori) * inp
-        #print(hh.size())
         return inp
 
 
@@ -1435,11 +1145,7 @@ class Projection_module_cars():
         for i in hh:
             arr = np.load(f'%s/{i}/latentcode.npy'%'exps/wrecked_cars')
             catt.append(arr)
-        catt = torch.from_numpy(np.concatenate(catt)).cuda()
-        #print(catt.size())
-        #exit()
-        #print(catt.size(), hh, args.exp_name)
-        #exit()
+
         self.catt_ori = catt.permute(1, 2, 0)
         self.catt_t = catt.permute(1, 0, 2)
         self.inv_mat = torch.inverse(torch.matmul(self.catt_t, self.catt_ori))
@@ -1476,3 +1182,95 @@ class Projection_module_cars():
         inp = self.sub_ori * orth + (1-self.sub_ori) * inp
         #print(hh.size())
         return inp
+    
+
+class HED_Network(torch.nn.Module):
+    
+    def __init__(self):
+        super().__init__()
+        arguments_strModel = 'bsds500'
+        self.netVggOne = torch.nn.Sequential(
+            torch.nn.Conv2d(in_channels=3, out_channels=64, kernel_size=3, stride=1, padding=1),
+            torch.nn.ReLU(inplace=False),
+            torch.nn.Conv2d(in_channels=64, out_channels=64, kernel_size=3, stride=1, padding=1),
+            torch.nn.ReLU(inplace=False)
+        )
+
+        self.netVggTwo = torch.nn.Sequential(
+            torch.nn.MaxPool2d(kernel_size=2, stride=2),
+            torch.nn.Conv2d(in_channels=64, out_channels=128, kernel_size=3, stride=1, padding=1),
+            torch.nn.ReLU(inplace=False),
+            torch.nn.Conv2d(in_channels=128, out_channels=128, kernel_size=3, stride=1, padding=1),
+            torch.nn.ReLU(inplace=False)
+        )
+
+        self.netVggThr = torch.nn.Sequential(
+            torch.nn.MaxPool2d(kernel_size=2, stride=2),
+            torch.nn.Conv2d(in_channels=128, out_channels=256, kernel_size=3, stride=1, padding=1),
+            torch.nn.ReLU(inplace=False),
+            torch.nn.Conv2d(in_channels=256, out_channels=256, kernel_size=3, stride=1, padding=1),
+            torch.nn.ReLU(inplace=False),
+            torch.nn.Conv2d(in_channels=256, out_channels=256, kernel_size=3, stride=1, padding=1),
+            torch.nn.ReLU(inplace=False)
+        )
+
+        self.netVggFou = torch.nn.Sequential(
+            torch.nn.MaxPool2d(kernel_size=2, stride=2),
+            torch.nn.Conv2d(in_channels=256, out_channels=512, kernel_size=3, stride=1, padding=1),
+            torch.nn.ReLU(inplace=False),
+            torch.nn.Conv2d(in_channels=512, out_channels=512, kernel_size=3, stride=1, padding=1),
+            torch.nn.ReLU(inplace=False),
+            torch.nn.Conv2d(in_channels=512, out_channels=512, kernel_size=3, stride=1, padding=1),
+            torch.nn.ReLU(inplace=False)
+        )
+
+        self.netVggFiv = torch.nn.Sequential(
+            torch.nn.MaxPool2d(kernel_size=2, stride=2),
+            torch.nn.Conv2d(in_channels=512, out_channels=512, kernel_size=3, stride=1, padding=1),
+            torch.nn.ReLU(inplace=False),
+            torch.nn.Conv2d(in_channels=512, out_channels=512, kernel_size=3, stride=1, padding=1),
+            torch.nn.ReLU(inplace=False),
+            torch.nn.Conv2d(in_channels=512, out_channels=512, kernel_size=3, stride=1, padding=1),
+            torch.nn.ReLU(inplace=False)
+        )
+
+        self.netScoreOne = torch.nn.Conv2d(in_channels=64, out_channels=1, kernel_size=1, stride=1, padding=0)
+        self.netScoreTwo = torch.nn.Conv2d(in_channels=128, out_channels=1, kernel_size=1, stride=1, padding=0)
+        self.netScoreThr = torch.nn.Conv2d(in_channels=256, out_channels=1, kernel_size=1, stride=1, padding=0)
+        self.netScoreFou = torch.nn.Conv2d(in_channels=512, out_channels=1, kernel_size=1, stride=1, padding=0)
+        self.netScoreFiv = torch.nn.Conv2d(in_channels=512, out_channels=1, kernel_size=1, stride=1, padding=0)
+
+        self.netCombine = torch.nn.Sequential(
+            torch.nn.Conv2d(in_channels=5, out_channels=1, kernel_size=1, stride=1, padding=0),
+            torch.nn.Sigmoid()
+        )
+
+        self.load_state_dict({ strKey.replace('module', 'net'): tenWeight for strKey, tenWeight in torch.hub.load_state_dict_from_url(url='http://content.sniklaus.com/github/pytorch-hed/network-' + arguments_strModel + '.pytorch', file_name='hed-' + arguments_strModel).items() })
+    # end
+
+    def forward(self, tenInput):
+        tenBlue = (tenInput[:, 0:1, :, :] * 255.0) - 104.00698793
+        tenGreen = (tenInput[:, 1:2, :, :] * 255.0) - 116.66876762
+        tenRed = (tenInput[:, 2:3, :, :] * 255.0) - 122.67891434
+
+        tenInput = torch.cat([ tenBlue, tenGreen, tenRed ], 1)
+
+        tenVggOne = self.netVggOne(tenInput)
+        tenVggTwo = self.netVggTwo(tenVggOne)
+        tenVggThr = self.netVggThr(tenVggTwo)
+        tenVggFou = self.netVggFou(tenVggThr)
+        tenVggFiv = self.netVggFiv(tenVggFou)
+
+        tenScoreOne = self.netScoreOne(tenVggOne)
+        tenScoreTwo = self.netScoreTwo(tenVggTwo)
+        tenScoreThr = self.netScoreThr(tenVggThr)
+        tenScoreFou = self.netScoreFou(tenVggFou)
+        tenScoreFiv = self.netScoreFiv(tenVggFiv)
+
+        tenScoreOne = torch.nn.functional.interpolate(input=tenScoreOne, size=(tenInput.shape[2], tenInput.shape[3]), mode='bilinear', align_corners=False)
+        tenScoreTwo = torch.nn.functional.interpolate(input=tenScoreTwo, size=(tenInput.shape[2], tenInput.shape[3]), mode='bilinear', align_corners=False)
+        tenScoreThr = torch.nn.functional.interpolate(input=tenScoreThr, size=(tenInput.shape[2], tenInput.shape[3]), mode='bilinear', align_corners=False)
+        tenScoreFou = torch.nn.functional.interpolate(input=tenScoreFou, size=(tenInput.shape[2], tenInput.shape[3]), mode='bilinear', align_corners=False)
+        tenScoreFiv = torch.nn.functional.interpolate(input=tenScoreFiv, size=(tenInput.shape[2], tenInput.shape[3]), mode='bilinear', align_corners=False)
+
+        return self.netCombine(torch.cat([ tenScoreOne, tenScoreTwo, tenScoreThr, tenScoreFou, tenScoreFiv ], 1))
