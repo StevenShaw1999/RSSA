@@ -130,7 +130,7 @@ class Invertor():
     def run(self,):
         image_list = os.listdir(args.image_dir)
         
-        for i in range(5, 10):
+        for i in range(len(image_list)):
             print(args.image_dir + image_list[i])
             image = self.read_image(args.image_dir + image_list[i])
             self.avg_latent_sub = self.avg_latent.clone()
